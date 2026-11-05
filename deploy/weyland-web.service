@@ -1,0 +1,23 @@
+[Unit]
+Description=Weyland web UI (loopback only; exposed via tailscale serve)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=weyland
+Group=weyland
+EnvironmentFile=-/etc/weyland/weyland.env
+ExecStart=/opt/weyland/.venv/bin/uvicorn --factory weyland.web:app_factory --host 127.0.0.1 --port 8730 --no-server-header --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/weyland
+ReadOnlyPaths=/etc/weyland
+
+[Install]
+WantedBy=multi-user.target

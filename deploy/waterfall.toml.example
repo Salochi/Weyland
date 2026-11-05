@@ -1,0 +1,78 @@
+# /etc/weyland/waterfall.toml  (mode 0640 root:weyland). Personal names live
+# here, never in the repo. Selectors are "Institution name:mask" (or the
+# account name when Plaid has no mask) — use the names exactly as Plaid
+# reports them. Give every account a role; "ignore" drops it from the close
+# entirely.
+
+[accounts]
+hysa       = "Big Bank:0000"          # exactly one; paychecks land here
+checking   = "Big Bank:0000"          # pass-through only
+card       = ["Big Bank:0001", "Other Credit Union:My Card"]
+brokerage  = "Brokerage Inc:0000"
+roth       = "Brokerage Inc:0000"
+retirement = "Retirement Services:My 401k"
+ignore     = ["Other Credit Union:0000"]
+
+[rules]  # case-insensitive regexes matched against the transaction name
+employer     = ["^EMPLOYER NAME"]
+reimbursers  = ["^ROOMMATE NAME"]        # Zelle-ins that repay shared bills
+card_payment = ["^MY BANK ACH"]          # outflows paying a card at another bank
+investment   = []                        # outflows funding the brokerage
+# internal transfer pairing defaults to Capital One's "Deposit from/Withdrawal
+# to Savings|Checking" phrasing; add patterns here for other banks.
+
+[waterfall]
+hysa_floor       = 20000
+bonus_multiple   = 1.5   # paycheck > 1.5x median paycheck => bonus candidate
+close_grace_days = 3     # a month can close this many days after it ends (late postings)
+start            = "2026-10"  # first close that gets a recommendation (earlier ones just freeze figures)
+
+# Money already committed to a known upcoming bill: held back from investable
+# until released (status = "released") once the bill posts.
+[[earmark]]
+name   = "furniture"
+amount = 1000.00
+status = "open"
+due    = "2026-11"
+note   = "balance due at delivery"
+
+[categories]  # labels by name/merchant regex; anything else uses Plaid's primary category
+rent          = ["(?i)^RENT PAYEE"]
+subscriptions = ["(?i)^STREAMING SERVICE"]
+
+[spending]  # which category labels are not "what I bought"
+fixed         = ["rent", "rent_and_utilities", "insurance"]  # required monthly costs (default)
+subscriptions = ["subscriptions"]                            # recurring services (default)
+
+[cards]
+# Plaid doesn't report a limit for some issuers; fill those in here. Selectors
+# must match a synced account, so keep these empty until your accounts are linked.
+limits     = {}                      # { "Big Bank:0001" = 5000 }
+manual_pay = []                      # ["Other Credit Union:My Card"] — no autopay: warn before the due date
+
+[rewards]  # cash-back cards; rates are fractions (0.03 = 3%)
+redemptions = []        # extra name regexes for cashback deposits/credits, added to the built-in "cash back"/"rewards"/"redemption" ones
+
+[[rewards.card]]
+card           = "Other Credit Union:My Card"
+base           = 0.02
+balance        = 0.00          # issuer reward balance as of balance_as_of (set by hand)
+balance_as_of  = "2026-01-01"
+
+[[rewards.card]]
+card  = "Big Bank:Bonus Card"
+base  = 0.01
+
+[[rewards.card.bonus]]        # a higher rate; first match wins (merchant regex or Plaid detail)
+label     = "groceries"
+rate      = 0.03
+plaid     = ["FOOD_AND_DRINK_GROCERIES"]
+merchants = ["(?i)^GROCERY CHAIN"]
+
+[[rewards.card.bonus]]        # tiers are card-specific: match the issuer's terms, not Plaid's guess
+label     = "dining"
+rate      = 0.03
+plaid     = ["FOOD_AND_DRINK_RESTAURANT", "FOOD_AND_DRINK_FAST_FOOD", "FOOD_AND_DRINK_COFFEE_SHOP"]
+
+[roth_limits]  # IRS annual IRA limit by tax year; the planner refuses years not listed
+2026 = 7500    # IRS Notice 2025-67

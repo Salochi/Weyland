@@ -1,0 +1,16 @@
+[Unit]
+Description=Weyland: sync all Plaid Items
+
+[Service]
+Type=oneshot
+User=weyland
+Group=weyland
+EnvironmentFile=-/etc/weyland/weyland.env
+ExecStart=/opt/weyland/.venv/bin/weyland sync
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/weyland
+ReadOnlyPaths=/etc/weyland

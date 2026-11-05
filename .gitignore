@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.db
+*.db-*
+*.key
+*.env
+!*.env.example
+.pytest_cache/
+dist/
+.hermes/

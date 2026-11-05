@@ -1,0 +1,10 @@
+[Unit]
+Description=Weyland: sync Plaid twice a day
+
+[Timer]
+OnCalendar=*-*-* 06:15,18:15
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

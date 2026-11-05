@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weyland</title>
+<style>
+:root {
+  /* slightly cool grays; orange for headers and key values, green for money gained/left over */
+  --bg: #16171a; --card: #212226; --card-hi: #292a2f; --well: #1b1c1f; --line: #33353a; --rule: #2a2b30;
+  --text: #e6e7ea; --muted: #989aa0; --faint: #686a70;
+  --accent: #f0a868; --accent-dim: #b07d52; --good: #7fcf9a; --good-dim: #4f8a66; --bad: #e0806e; --warn: #e6c26e;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; border-radius: 0 !important; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+.wy { padding: 20px 28px 40px; }
+.num, .v, td.amt { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.acc { color: var(--accent); } .good { color: var(--good); } .bad { color: var(--bad); }
+.warn { color: var(--warn); } .muted { color: var(--muted); } .faint { color: var(--faint); }
+
+.top { display: flex; align-items: center; gap: 24px; margin-bottom: 18px; flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: .18em; color: var(--accent); font-size: 15px; }
+.env { font-size: 11px; padding: 1px 7px; border: 1px solid var(--line); color: var(--muted); letter-spacing: .08em; }
+.env.sandbox { color: #9cc8ee; border-color: #2c3b48; }
+.tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.tab { background: none; border: 0; color: var(--muted); font: inherit; padding: 8px 14px; cursor: pointer;
+       border-bottom: 2px solid transparent; }
+.tab:hover { color: var(--text); }
+.tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+.tab .badge { font-size: 11px; color: var(--warn); margin-left: 4px; }
+.sync { margin-left: auto; color: var(--muted); font-size: 12px; display: flex; gap: 10px; align-items: center; }
+.btn { background: var(--card-hi); color: var(--text); border: 1px solid var(--line); font: inherit;
+       font-size: 12px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent-dim); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.pri { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+.dot { display: inline-block; width: 7px; height: 7px; background: var(--good); margin-right: 6px; vertical-align: 1px; }
+#log { font-family: var(--mono); font-size: 12px; color: var(--muted); min-height: 1.4em; margin: -8px 0 10px; }
+
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
+.c { background: var(--card); border: 1px solid var(--line); padding: 16px 18px; min-width: 0; }
+.s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}.s5{grid-column:span 5}
+.s6{grid-column:span 6}.s7{grid-column:span 7}.s8{grid-column:span 8}.s12{grid-column:span 12}
+.r2 { grid-row: span 2; }
+.h { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+     font-weight: 600; margin: 0 0 10px; display: flex; justify-content: space-between; gap: 8px; }
+.h .sub { color: var(--faint); letter-spacing: .04em; text-transform: none; font-weight: 400; text-align: right; }
+.sect { grid-column: span 12; padding: 6px 2px 0; }
+.big { font-size: 30px; font-weight: 600; color: var(--accent); line-height: 1.1; }
+.mid { font-size: 21px; font-weight: 600; color: var(--accent); line-height: 1.15; }
+.lbl { color: var(--muted); font-size: 12px; }
+.row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; }
+.row + .row { border-top: 1px solid var(--rule); }
+.row .v { white-space: nowrap; }
+.row.total { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; font-weight: 600; }
+.bar { height: 6px; background: var(--well); margin-top: 8px; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.pill { font-size: 11px; padding: 1px 7px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.pill.warn { color: var(--warn); border-color: #5a4e30; } .pill.good { color: var(--good); border-color: #33503f; }
+.pill.bad { color: var(--bad); border-color: #5a3a33; } .pill.acc { color: var(--accent); border-color: var(--accent-dim); }
+.empty { color: var(--faint); font-size: 13px; }
+
+.attn { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.attn .it { display: flex; gap: 8px; align-items: center; padding: 6px 12px; background: var(--card-hi);
+            border-left: 2px solid var(--warn); font-size: 13px; cursor: pointer; }
+.attn .it.ok { border-left-color: var(--good); } .attn .it.bad { border-left-color: var(--bad); }
+
+.tile .inst { color: var(--muted); font-size: 12px; }
+.tile .name { font-weight: 600; margin: 1px 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .foot { display: flex; justify-content: space-between; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.tile.card-manual { border-top: 2px solid var(--warn); }
+
+.wf .step { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 6px 0; align-items: center; }
+.wf .step .k { color: var(--muted); }
+.wf .step.minus .v { color: var(--muted); }
+.wf .split { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 14px; }
+.wf .split > div { background: var(--card-hi); padding: 12px; border-top: 2px solid var(--accent); }
+.wf .split > div.hold { border-top-color: var(--faint); }
+.wf .split > div.brk { border-top-color: var(--accent-dim); }
+.wfbar { display: flex; height: 14px; margin-top: 12px; background: var(--well); }
+.wfbar > i { display: block; height: 100%; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; letter-spacing: .08em;
+     text-transform: uppercase; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:hover td { background: var(--card-hi); }
+td.amt, th.amt { text-align: right; white-space: nowrap; }
+tr.refunded td { color: var(--faint); }
+.cbtag { color: var(--good); font-size: .72em; white-space: nowrap; margin-left: .45em; opacity: .85; }
+tr.refunded td.m span.t { text-decoration: line-through; }
+.scroll { max-height: 640px; overflow: auto; }
+
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.seg { display: flex; border: 1px solid var(--line); flex-wrap: wrap; }
+.seg button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12px; padding: 6px 11px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent); color: var(--bg); font-weight: 600; }
+.inp, select.inp { background: var(--well); border: 1px solid var(--line); color: var(--text); font: inherit;
+                   font-size: 13px; padding: 6px 10px; color-scheme: dark; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: 12px; padding: 4px 10px; border: 1px solid var(--line); color: var(--muted); cursor: pointer; background: none; font-family: inherit; }
+.chip.on { border-color: var(--accent); color: var(--accent); }
+.catbars .cb { display: grid; grid-template-columns: minmax(90px, 140px) 1fr 84px; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; cursor: pointer; }
+.catbars .cb .t { height: 10px; background: var(--well); } .catbars .cb .t i { display: block; height: 100%; background: var(--accent); }
+.catbars .cb.neg .t i { background: var(--good); }
+.catbars .cb span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.sched button { background: var(--card-hi); border: 1px solid var(--line); color: var(--text); font: inherit; padding: 8px 4px; cursor: pointer; text-align: center; }
+.sched button.skip { color: var(--faint); border-style: dashed; }
+.sched button:disabled { cursor: default; opacity: .7; }
+.sched .m { font-size: 11px; color: var(--muted); display: block; }
+pre { white-space: pre-wrap; background: var(--well); border: 1px solid var(--line); padding: 12px; font-size: 12px; max-height: 420px; overflow: auto; }
+svg text { font-family: var(--sans); }
+.view { display: none; } .view.on { display: block; }
+.legend { display: flex; gap: 16px; font-size: 12px; margin-top: 6px; flex-wrap: wrap; }
+#tip { position: fixed; pointer-events: none; background: #0f1012; border: 1px solid var(--line); padding: 6px 9px; font-size: 12px; display: none; z-index: 9; white-space: nowrap; }
+
+@media (max-width: 1280px) {
+  .grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .s5,.s6,.s7,.s8,.s12{grid-column:span 6} .s4{grid-column:span 3} .s3{grid-column:span 3} .s2{grid-column:span 2}
+  .ov-nw, .ov-wf, .ov-roth { grid-column: span 6 !important; } .r2 { grid-row: auto; }
+}
+@media (max-width: 680px) {
+  .wy { padding: 14px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .s2,.s3,.s4,.s5,.s6,.s7,.s8,.s12 { grid-column: span 2; } .tile.s2 { grid-column: span 1; }
+  .ov-nw, .ov-wf, .ov-roth { grid-column: span 2 !important; }
+  .wf .split { grid-template-columns: 1fr; }
+  .sync { margin-left: 0; width: 100%; }
+  .sched { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="wy">
+  <div class="top">
+    <div class="brand">WEYLAND</div>
+    <span class="env {{ENV}}">{{ENV}}</span>
+    <div class="tabs">
+      <button class="tab on" data-v="overview">Overview</button>
+      <button class="tab" data-v="spending">Spending</button>
+      <button class="tab" data-v="rewards">Rewards</button>
+      <button class="tab" data-v="close">Close &amp; waterfall<span class="badge" id="b-close"></span></button>
+      <button class="tab" data-v="admin">Admin<span class="badge" id="b-admin"></span></button>
+    </div>
+    <div class="sync"><span id="synced"></span><button class="btn" id="btn-sync">Sync now</button></div>
+  </div>
+  <div id="log"></div>
+
+  <!-- OVERVIEW -->
+  <div class="view on" id="overview"><div class="grid" id="ov"><div class="c s12 empty">Loading…</div></div></div>
+
+  <!-- SPENDING -->
+  <div class="view" id="spending">
+    <div class="grid">
+      <div class="c s12">
+        <div class="filters">
+          <div class="seg" id="ranges"></div>
+          <input class="inp" type="date" id="f-start"><span class="faint">→</span><input class="inp" type="date" id="f-end">
+          <select class="inp" id="f-acct"><option value="">All accounts &amp; cards</option></select>
+          <input class="inp" id="f-q" placeholder="Search merchant…" style="flex:1;min-width:160px">
+        </div>
+        <div class="filters" style="margin-top:12px">
+          <div class="seg" id="buckets">
+            <button data-b="spending" class="on">Spending</button><button data-b="subscriptions">Subscriptions</button><button data-b="fixed">Rent &amp; bills</button>
+          </div>
+          <div class="chips" id="chips"></div>
+        </div>
+      </div>
+      <div class="c s3"><div class="h">Spent</div><div class="big num" id="k-spent">–</div><div class="lbl" id="k-range"></div></div>
+      <div class="c s3"><div class="h">Purchases</div><div class="big num" id="k-n">–</div><div class="lbl" id="k-avg"></div></div>
+      <div class="c s3"><div class="h">Refunds</div><div class="big num good" id="k-ref">–</div><div class="lbl" id="k-pairs"></div></div>
+      <div class="c s3"><div class="h">vs. previous period</div><div class="big num" id="k-cmp">–</div><div class="lbl" id="k-prev"></div></div>
+      <div class="c s4"><div class="h">By category <span class="sub">click to filter</span></div><div class="catbars" id="sp-cats"></div></div>
+      <div class="c s8">
+        <div class="h">Transactions <span class="sub">purchases negative · refunds positive · refunded pairs net to $0 · green +x% = estimated cash back</span></div>
+        <div class="scroll"><table id="sp-rows"></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REWARDS -->
+  <div class="view" id="rewards">
+    <div class="grid" id="rw"><div class="c s12 empty">Loading…</div></div>
+  </div>
+
+  <!-- CLOSE -->
+  <div class="view" id="close">
+    <div class="grid">
+      <div class="c s8"><div class="h">Monthly closes <span class="sub">surplus = paychecks − spending − subscriptions − fixed</span></div><div id="cl-months" class="scroll"></div></div>
+      <div class="c s4">
+        <div class="h">Roth schedule <span class="sub" id="cl-ty"></span></div>
+        <div class="sched" id="cl-sched"></div>
+        <div class="lbl" style="margin-top:10px">Click a month to skip or un-skip it. A skipped month's share stays in the HYSA and later installments rebalance.</div>
+      </div>
+      <div class="c s6">
+        <div class="h">Roth contributions</div>
+        <div id="cl-contrib"></div>
+        <div class="filters" style="margin-top:12px">
+          <input class="inp" type="date" id="rc-date"><input class="inp" id="rc-amt" placeholder="Amount" inputmode="decimal" style="width:110px">
+          <input class="inp" id="rc-ty" placeholder="Tax year (auto)" style="width:130px"><input class="inp" id="rc-note" placeholder="Note" style="flex:1;min-width:100px">
+          <button class="btn pri" id="rc-add">Add</button>
+        </div>
+        <div class="lbl" style="margin-top:8px">Tax year defaults from the date (Jan–Mar count toward the year before).</div>
+      </div>
+      <div class="c s6"><div class="h">Earmarks</div><div id="cl-earmarks"></div>
+        <div class="lbl" style="margin-top:8px">Held back from investable until released. Edited in waterfall.toml.</div></div>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="view" id="admin">
+    <div class="grid">
+      <div class="c s12">
+        <div class="h">Institutions <span class="sub" id="slots"></span></div>
+        <div id="ad-items"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn pri" id="btn-bank">Link bank / card</button><button class="btn pri" id="btn-inv">Link brokerage / IRA / 401k</button>
+        </div>
+        <div class="lbl" style="margin-top:8px">Read-only products only (no Auth, Identity or Transfer). Re-connect never uses a Trial slot.</div>
+      </div>
+      <div class="c s12"><div class="h">Review queue <span class="sub" id="rv-sum"></span></div><div id="review"></div></div>
+      <div class="c s12"><div class="h">Coverage report <span class="sub">safe to share: no balances, amounts or account numbers</span></div><pre id="md"></pre></div>
+    </div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const all = (sel, root = document) => [...root.querySelectorAll(sel)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const log = (msg) => { $("log").textContent = msg; };
+const usd = (v, signed = false) => v == null ? "–" :
+  (v < 0 ? "−" : signed && v > 0 ? "+" : "") + "$" + Math.abs(v).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const usd0 = (v) => (v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString("en-US", {maximumFractionDigits: 0});
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const mlabel = (ym) => MON[+ym.slice(5, 7) - 1] + (ym.slice(0, 4) !== String(new Date().getFullYear()) ? " " + ym.slice(2, 4) : "");
+const dlabel = (d) => MON[+d.slice(5, 7) - 1] + " " + (+d.slice(8, 10));
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const catName = (c) => ({rent_and_utilities: "Rent & utilities", food_and_drink: "Food & drink", general_merchandise: "Shopping",
+  general_services: "Services", home_improvement: "Home", personal_care: "Personal care", transfer_out: "Cash & transfers",
+  reimbursed: "Roommate share", subscriptions: "Subscriptions"}[c] || (c.charAt(0).toUpperCase() + c.slice(1)).replace(/_/g, " "));
+const api = async (path, body) => {
+  const r = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: {"content-type": "application/json", "x-weyland": "1"}, body: JSON.stringify(body)});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || data.message || data.error || r.statusText);
+  return data;
+};
+const tip = $("tip");
+document.addEventListener("mousemove", (e) => {
+  const t = e.target.closest && e.target.closest("[data-tip]");
+  if (!t) { tip.style.display = "none"; return; }
+  tip.innerHTML = t.dataset.tip; tip.style.display = "block";
+  tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (e.clientY + 14) + "px";
+});
+
+// ---- tabs ------------------------------------------------------------------
+function show(v) {
+  all(".tab").forEach(x => x.classList.toggle("on", x.dataset.v === v));
+  all(".view").forEach(x => x.classList.toggle("on", x.id === v));
+  if (location.hash !== "#" + v) history.replaceState(null, "", "#" + v);
+  if (v === "spending" && !SP.loaded) loadSpending();
+  if (v === "rewards" && !RW.loaded) loadRewards();
+}
+all(".tab").forEach(t => t.onclick = () => show(t.dataset.v));
+
+// ---- overview ----------------------------------------------------------------
+let OV = null;
+async function loadOverview() {
+  try { OV = await api("/api/overview"); }
+  catch (e) { $("ov").innerHTML = `<div class="c s12 bad">Overview unavailable: ${esc(e.message)}</div>`; return; }
+  renderOverview(OV);
+  fillAccountFilter(OV.accounts);
+  renderClosePanels();
+}
+
+function renderOverview(d) {
+  let h = "";
+  const at = d.attention;
+  h += `<div class="c s12 attn"><span class="h" style="margin:0 6px 0 0">Needs attention</span>` +
+    (at.length ? at.map(a => `<div class="it ${a.level === "ok" ? "ok" : a.level === "bad" ? "bad" : ""}" data-go="${esc(a.tab)}">` +
+      `<span class="${a.level === "ok" ? "good" : a.level === "bad" ? "bad" : "warn"}">●</span> ${esc(a.text)}</div>`).join("")
+      : `<div class="it ok"><span class="good">●</span> All clear</div>`) + "</div>";
+  h += netWorthCard(d.net_worth) + waterfallCard(d.recommendation, d.next_close) + rothCard(d.roth);
+  h += `<div class="sect"><div class="h" style="margin:0">Accounts</div></div>`;
+  for (const a of d.accounts) h += a.type === "credit" ? cardTile(a) : accountTile(a);
+  h += cashFlowCard(d.cash_flow) + upcomingCard(d.upcoming);
+  h += thisMonthCard(d.this_month) + holdingsCard(d.holdings);
+  $("ov").innerHTML = h;
+  all("[data-go]").forEach(x => x.onclick = () => show(x.dataset.go));
+  all("[data-cat-jump]").forEach(x => x.onclick = () => { SP.cats = new Set([x.dataset.catJump]); setRange("month"); show("spending"); });
+  const ra = $("ov-roth-add"); if (ra) ra.onclick = () => { show("close"); $("rc-date").focus(); };
+  drawSpark(d.net_worth.history);
+  drawFlow(d.cash_flow);
+}
+
+function netWorthCard(nw) {
+  const p = nw.parts, hist = nw.history;
+  let delta = "";
+  if (hist.length >= 2) {
+    const dv = nw.total - hist[0].total;
+    delta = `<span class="${dv >= 0 ? "good" : "bad"} num">${usd(dv, true)}</span> since ${dlabel(hist[0].date)}`;
+  } else delta = hist.length ? `tracking since ${dlabel(hist[0].date)}; the trend fills in daily` : "no balance history yet";
+  const line = (k, v, cls = "") => `<div class="row"><span class="muted">${k}</span><span class="v ${cls}">${usd(v)}</span></div>`;
+  return `<div class="c s4 r2 ov-nw"><div class="h">Net worth <span class="sub">assets − cards owed</span></div>
+    <div class="big num">${usd(nw.total)}</div><div class="lbl">${delta}</div>
+    <svg id="spark" width="100%" height="70" viewBox="0 0 300 70" preserveAspectRatio="none" style="margin:12px 0 6px;display:block"></svg>
+    ${line("Cash (bank accounts)", p.cash)}${line("Brokerage", p.brokerage)}${line("Roth IRA", p.roth)}
+    ${line("401(k)", p.retirement)}${line("Cards owed", p.cards, p.cards ? "bad" : "")}</div>`;
+}
+
+function drawSpark(hist) {
+  const s = $("spark"); if (!s) return;
+  if (hist.length < 2) {
+    s.innerHTML = `<line x1="0" x2="300" y1="35" y2="35" stroke="#343331" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`; return;
+  }
+  const v = hist.map(x => x.total), mn = Math.min(...v), mx = Math.max(...v), pad = (mx - mn) * .1 || 1;
+  const xy = v.map((y, i) => [i / (v.length - 1) * 300, 66 - (y - mn + pad) / (mx - mn + 2 * pad) * 62]);
+  const path = xy.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  s.innerHTML = `<path d="${path} L300 70 L0 70 Z" fill="#f0a868" opacity=".10"/>` +
+    `<path d="${path}" fill="none" stroke="#f0a868" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+}
+
+function waterfallCard(r, next) {
+  const head = `<div class="c s5 r2 wf ov-wf"><div class="h">Month-end waterfall <span class="sub">`;
+  if (!r) return head + `${next ? "next: " + esc(mlabel(next.month)) + " · closes " + dlabel(next.date) : ""}</span></div>
+    <div class="empty">No recommendation yet. ${next ? `A preview for ${esc(mlabel(next.month))} appears once the month ends;
+    closing it on or after ${dlabel(next.date)} freezes it.` : "The first one comes with the start month in waterfall.toml."}</div></div>`;
+  const status = r.status === "closed" ? "closed · frozen" : "preview · freezes at close";
+  let h = head + `${esc(mlabel(r.month))} · ${status}</span></div>`;
+  if (r.hysa === undefined) return h + `<div class="bad">${esc(r.error)}</div></div>`;
+  const step = (k, v, minus) => `<div class="step ${minus ? "minus" : ""}"><span class="k">${k}</span><span class="v">${usd(v)}</span></div>`;
+  h += step(`HYSA on ${r.balance_as_of ? dlabel(r.balance_as_of) : "month end"}`, r.hysa);
+  h += step("− Emergency floor", r.floor, true);
+  for (const e of r.earmarks) h += step(`− Earmark: ${esc(e.name)} ${e.due ? `<span class="pill">due ${esc(e.due)}</span>` : ""}`, e.amount, true);
+  h += step("− Cards owed at month end", r.cards_owed, true);
+  h += `<div class="row total"><span>Investable</span><span class="v ${r.investable > 0 ? "good" : "muted"}">${usd(r.investable)}</span></div>`;
+  if (r.error) return h + `<div class="bad" style="margin-top:10px">${esc(r.error)}</div></div>`;
+  const inv = r.investable || 1, pc = (x) => (x / inv * 100).toFixed(2) + "%";
+  h += `<div class="wfbar"><i style="width:${pc(r.to_roth)};background:var(--accent)"></i><i style="width:${pc(r.held_for_roth)};background:var(--faint)"></i><i style="width:${pc(r.to_brokerage)};background:var(--accent-dim)"></i></div>`;
+  const ro = r.roth;
+  h += `<div class="split">
+    <div><div class="lbl">→ Roth IRA</div><div class="mid num">${usd(r.to_roth)}</div><div class="lbl">${ro.skipped ? "skipped this month" : `TY${ro.tax_year} installment`}</div></div>
+    <div class="hold"><div class="lbl">↺ Kept in HYSA</div><div class="mid num" style="color:var(--text)">${usd(r.held_for_roth)}</div><div class="lbl">for later installments</div></div>
+    <div class="brk"><div class="lbl">→ Brokerage</div><div class="mid num">${usd(r.to_brokerage)}</div><div class="lbl">rest of investable</div></div></div>`;
+  if (r.shortfall) h += `<div class="lbl warn" style="margin-top:10px">Roth is ${usd(r.shortfall)} short of the installment; later ones rise to catch up.</div>`;
+  if (r.confirmed_bonus) h += `<div class="lbl" style="margin-top:6px">Includes confirmed bonus ${usd(r.confirmed_bonus)}.</div>`;
+  return h + `<div class="lbl faint" style="margin-top:12px">Recommendation only. Weyland never moves money.</div></div>`;
+}
+
+function rothCard(ro) {
+  if (!ro || ro.limit == null) return `<div class="c s3 r2 ov-roth"><div class="h">Roth IRA</div><div class="bad">${esc(ro ? ro.error : "unavailable")}</div></div>`;
+  const pct = Math.min(100, ro.contributed / ro.limit * 100);
+  const skipped = ro.schedule.filter(s => s.skipped).map(s => mlabel(s.month)).join(", ") || "none";
+  const nextInst = ro.schedule.find(s => !s.skipped);
+  return `<div class="c s3 r2 ov-roth"><div class="h">Roth IRA · TY${ro.tax_year} <span class="sub">deadline ${dlabel(ro.deadline)}</span></div>
+    <div class="big num">${usd(ro.remaining)}</div><div class="lbl">left of ${usd(ro.limit)} limit</div>
+    <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+    <div class="row" style="margin-top:10px"><span class="muted">Contributed</span><span class="v">${usd(ro.contributed)}</span></div>
+    <div class="row"><span class="muted">Closes left</span><span class="v">${ro.closes_left}</span></div>
+    <div class="row"><span class="muted">Next installment</span><span class="v acc">${nextInst ? usd(nextInst.amount) + " · " + mlabel(nextInst.month) : "–"}</span></div>
+    <div class="row"><span class="muted">Skipped</span><span class="v">${esc(skipped)}</span></div>
+    <div class="row"><span class="muted">Last</span><span class="v">${ro.last ? dlabel(ro.last.date) + " · " + usd(ro.last.amount) : "none yet"}</span></div>
+    <button class="btn" id="ov-roth-add" style="margin-top:12px;width:100%">+ Record contribution</button></div>`;
+}
+
+const ROLE = {hysa: "HYSA", checking: "Checking", brokerage: "Brokerage", roth: "Roth IRA", retirement: "401(k)", ignore: ""};
+function accountTile(a) {
+  const foot = {hysa: "emergency fund", checking: "pass-through", ignore: "not in waterfall"}[a.role] || "";
+  return `<div class="c s2 tile"><div class="inst">${esc(a.institution)}${ROLE[a.role] ? " · " + ROLE[a.role] : ""}</div>
+    <div class="name" title="${esc(a.label)}">${esc(a.label)}</div><div class="mid num">${usd(a.current)}</div>
+    <div class="foot"><span>${esc(a.subtype || "")}</span><span>${esc(foot)}</span></div></div>`;
+}
+function cardTile(a) {
+  const owed = Math.max(a.owed || 0, 0), credit = (a.owed || 0) < 0;
+  let lim = "";
+  if (a.limit) {
+    const pct = Math.min(100, owed / a.limit * 100);
+    const col = pct >= 30 ? "var(--warn)" : "var(--accent)";
+    lim = `<div class="bar"><i style="width:${pct.toFixed(1)}%;background:${col}"></i></div>
+      <div class="lbl" style="margin-top:4px">${pct.toFixed(0)}% of ${usd0(a.limit)} limit</div>`;
+  }
+  const days = a.due_date ? Math.round((new Date(a.due_date + "T00:00") - new Date(iso(new Date()) + "T00:00")) / 864e5) : null;
+  return `<div class="c s2 tile ${a.manual_pay ? "card-manual" : ""}"><div class="inst">${esc(a.institution)} · credit</div>
+    <div class="name" title="${esc(a.label)}">${esc(a.label)}</div>
+    <div class="mid num" style="color:${owed ? "var(--bad)" : "var(--text)"}">${credit ? usd(-a.owed) + " credit" : usd(-owed)}</div>${lim}
+    <div class="foot"><span>${a.due_date ? "due " + dlabel(a.due_date) + (days != null && days >= 0 ? ` (${days}d)` : "") : ""}</span>
+    <span class="${a.manual_pay ? "warn" : ""}">${a.manual_pay ? "manual pay" : "autopay"}</span></div>
+    ${a.statement_balance != null ? `<div class="foot" style="margin-top:4px"><span>statement ${usd(a.statement_balance)}</span><span>min ${usd(a.minimum_payment)}</span></div>` : ""}</div>`;
+}
+
+function cashFlowCard(flow) {
+  return `<div class="c s7"><div class="h">Cash flow <span class="sub">paychecks vs. what went out, by month</span></div>
+    <svg id="flow" width="100%" height="200" viewBox="0 0 700 200" preserveAspectRatio="none" style="display:block"></svg>
+    <div class="legend muted"><span><span class="dot" style="background:var(--accent)"></span>Paychecks</span>
+    <span><span class="dot" style="background:#8b8d93"></span>Spending</span><span><span class="dot" style="background:#8a6f9e"></span>Subscriptions</span>
+    <span><span class="dot" style="background:#5d6f8a"></span>Rent &amp; bills</span><span class="faint">faded = partial history</span></div></div>`;
+}
+function drawFlow(flow) {
+  const s = $("flow"); if (!s || !flow.length) return;
+  const W = 700, H = 176, n = flow.length, gw = W / n;
+  const top = Math.max(1, ...flow.map(f => Math.max(f.paychecks, f.spending + f.subscriptions + Math.max(f.fixed, 0)))) * 1.08;
+  let g = "";
+  for (let i = 1; i <= 3; i++) { const y = H - i * H / 3; g += `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#2a2b30" vector-effect="non-scaling-stroke"/>`; }
+  flow.forEach((f, i) => {
+    const x = i * gw + gw * .14, bw = gw * .34, op = f.partial ? .35 : 1;
+    const t = `<b>${esc(mlabel(f.month))}</b>${f.partial ? " (partial)" : ""}<br>Paychecks ${usd(f.paychecks)}<br>Spending ${usd(f.spending)}<br>` +
+      `Subscriptions ${usd(f.subscriptions)}<br>Rent &amp; bills ${usd(f.fixed)}<br>Surplus <span style="color:${f.surplus >= 0 ? "#7fcf9a" : "#e0806e"}">${usd(f.surplus)}</span>`;
+    const hp = f.paychecks / top * H;
+    g += `<g opacity="${op}" data-tip="${esc(t)}"><rect x="${i * gw}" y="0" width="${gw}" height="${H}" fill="transparent"/>`;
+    g += `<rect x="${x}" y="${H - hp}" width="${bw}" height="${hp}" fill="#f0a868"/>`;
+    let y = H;
+    for (const [v, c] of [[Math.max(f.fixed, 0), "#5d6f8a"], [f.subscriptions, "#8a6f9e"], [f.spending, "#8b8d93"]]) {
+      const hh = Math.max(v, 0) / top * H; y -= hh;
+      g += `<rect x="${x + bw + 3}" y="${y}" width="${bw}" height="${hh}" fill="${c}"/>`;
+    }
+    g += `</g><text x="${i * gw + gw / 2}" y="194" fill="#989aa0" font-size="11" text-anchor="middle">${esc(mlabel(f.month))}</text>`;
+  });
+  s.innerHTML = g;
+}
+
+function upcomingCard(up) {
+  const rows = up.map(u => {
+    const when = u.month_only ? MON[+u.date.slice(5, 7) - 1] : dlabel(u.date);
+    const pill = u.kind === "card" ? (u.manual ? `<span class="pill warn">manual</span>` : `<span class="pill">autopay</span>`)
+      : u.kind === "earmark" ? `<span class="pill">earmarked</span>` : "";
+    const amt = u.amount != null ? ` · <span class="${u.kind === "card" && u.manual ? "acc" : ""}">${usd(u.amount)}</span>` : "";
+    return `<div class="row"><span>${esc(u.label)} ${pill}</span><span class="v">${when}${amt}</span></div>`;
+  }).join("");
+  return `<div class="c s5"><div class="h">Upcoming</div>${rows || '<div class="empty">Nothing scheduled.</div>'}</div>`;
+}
+
+function catBars(cats, limit, attr = "data-cat-jump") {
+  const ent = Object.entries(cats).filter(([, v]) => Math.abs(v) >= 0.005).slice(0, limit);
+  if (!ent.length) return '<div class="empty">Nothing yet.</div>';
+  const mx = Math.max(...ent.map(([, v]) => Math.abs(v)));
+  return ent.map(([k, v]) => `<div class="cb ${v < 0 ? "neg" : ""}" ${attr}="${esc(k)}"><span title="${esc(catName(k))}">${esc(catName(k))}</span>` +
+    `<div class="t"><i style="width:${(Math.abs(v) / mx * 100).toFixed(1)}%"></i></div><span class="num" style="text-align:right">${usd(v)}</span></div>`).join("");
+}
+function thisMonthCard(tm) {
+  if (!tm) return `<div class="c s5"><div class="h">Spending this month</div><div class="empty">No transactions yet.</div></div>`;
+  const cats = Object.fromEntries(Object.entries(tm.categories).filter(([k]) => !["rent", "rent_and_utilities", "insurance", "subscriptions", "reimbursed"].includes(k)));
+  return `<div class="c s5"><div class="h">Spending · ${esc(mlabel(tm.month))} <span class="sub">excludes rent, bills &amp; subscriptions</span></div>
+    <div class="mid num">${usd(tm.spending)}</div>
+    <div class="lbl">subscriptions ${usd(tm.subscriptions)} · rent &amp; bills ${usd(tm.fixed)}${tm.refunds ? ` · <span class="good">${usd(tm.refunds)} refunded</span>` : ""}</div>
+    <div class="catbars" style="margin-top:10px">${catBars(cats, 6)}</div></div>`;
+}
+function holdingsCard(hd) {
+  if (!hd.positions.length) return `<div class="c s7"><div class="h">Holdings</div><div class="empty">No holdings reported.</div></div>`;
+  const top = hd.positions.slice(0, 6), rest = hd.positions.slice(6);
+  const restV = rest.reduce((a, h) => a + h.value, 0);
+  const types = Object.entries(hd.by_type).map(([k, v]) => `${esc(k)} ${(v / hd.total * 100).toFixed(0)}%`).join(" · ");
+  return `<div class="c s7"><div class="h">Holdings <span class="sub">${usd(hd.total)} · ${types}</span></div><table>
+    <tr><th>Position</th><th>Account</th><th class="amt">Value</th><th class="amt">Gain</th><th class="amt">Weight</th></tr>` +
+    top.map(h => `<tr><td>${h.ticker ? `<b>${esc(h.ticker)}</b> · ` : ""}${esc(h.name)}</td><td class="muted">${esc(ROLE[h.role] || h.account)}</td>` +
+      `<td class="amt">${usd(h.value)}</td><td class="amt ${h.gain == null ? "faint" : h.gain >= 0 ? "good" : "bad"}">${h.gain == null ? "–" : usd(h.gain, true)}</td>` +
+      `<td class="amt">${(h.weight * 100).toFixed(1)}%</td></tr>`).join("") +
+    (rest.length ? `<tr><td class="muted">+ ${rest.length} more</td><td></td><td class="amt muted">${usd(restV)}</td><td></td><td class="amt muted">${(restV / hd.total * 100).toFixed(1)}%</td></tr>` : "") +
+    `</table></div>`;
+}
+
+// ---- spending ----------------------------------------------------------------
+const SP = {loaded: false, range: "month", buckets: new Set(["spending"]), cats: new Set(), acct: "", q: ""};
+const RANGES = [["2w", "2 weeks"], ["month", "This month"], ["last", "Last month"], ["90", "90 days"], ["ytd", "YTD"], ["12m", "12 months"]];
+$("ranges").innerHTML = RANGES.map(([k, l]) => `<button data-r="${k}">${l}</button>`).join("");
+function setRange(k) {
+  const t = new Date(); let a, b = t;
+  if (k === "2w") a = new Date(t.getFullYear(), t.getMonth(), t.getDate() - 13);
+  if (k === "month") a = new Date(t.getFullYear(), t.getMonth(), 1);
+  if (k === "last") { a = new Date(t.getFullYear(), t.getMonth() - 1, 1); b = new Date(t.getFullYear(), t.getMonth(), 0); }
+  if (k === "90") a = new Date(t.getFullYear(), t.getMonth(), t.getDate() - 89);
+  if (k === "ytd") a = new Date(t.getFullYear(), 0, 1);
+  if (k === "12m") a = new Date(t.getFullYear() - 1, t.getMonth(), t.getDate() + 1);
+  SP.range = k; $("f-start").value = iso(a); $("f-end").value = iso(b);
+  all("#ranges button").forEach(x => x.classList.toggle("on", x.dataset.r === k));
+  loadSpending();
+}
+all("#ranges button").forEach(b => b.onclick = () => setRange(b.dataset.r));
+for (const id of ["f-start", "f-end"]) $(id).onchange = () => { SP.range = ""; all("#ranges button").forEach(x => x.classList.remove("on")); loadSpending(); };
+$("f-acct").onchange = () => { SP.acct = $("f-acct").value; loadSpending(); };
+let qTimer; $("f-q").oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(() => { SP.q = $("f-q").value; loadSpending(); }, 250); };
+all("#buckets button").forEach(b => b.onclick = () => {
+  const k = b.dataset.b;
+  if (SP.buckets.has(k) && SP.buckets.size > 1) SP.buckets.delete(k); else SP.buckets.add(k);
+  all("#buckets button").forEach(x => x.classList.toggle("on", SP.buckets.has(x.dataset.b)));
+  SP.cats.clear(); loadSpending();
+});
+function fillAccountFilter(accts) {
+  const sel = $("f-acct"), cur = sel.value;
+  sel.innerHTML = `<option value="">All accounts &amp; cards</option>` + accts.filter(a => ["card", "hysa", "checking"].includes(a.role))
+    .map(a => `<option value="${esc(a.account_id)}">${esc(a.label)}</option>`).join("");
+  sel.value = cur;
+}
+
+let spSeq = 0;
+async function loadSpending() {
+  SP.loaded = true;
+  if (!$("f-start").value) { setRange(SP.range || "month"); return; }
+  const p = new URLSearchParams({start: $("f-start").value, end: $("f-end").value, buckets: [...SP.buckets].join(","),
+    account: SP.acct, category: [...SP.cats].join(","), q: SP.q});
+  const seq = ++spSeq;
+  let d;
+  try { d = await api("/api/spending?" + p); }
+  catch (e) { $("sp-rows").innerHTML = `<tr><td class="bad">${esc(e.message)}</td></tr>`; return; }
+  if (seq !== spSeq) return;
+  $("chips").innerHTML = [`<button class="chip ${SP.cats.size ? "" : "on"}" data-c="">All categories</button>`,
+    ...d.all_categories.map(c => `<button class="chip ${SP.cats.has(c) ? "on" : ""}" data-c="${esc(c)}">${esc(catName(c))}</button>`)].join("");
+  all("#chips .chip").forEach(c => c.onclick = () => {
+    const k = c.dataset.c;
+    if (!k) SP.cats.clear(); else if (SP.cats.has(k)) SP.cats.delete(k); else SP.cats.add(k);
+    loadSpending();
+  });
+  $("k-spent").textContent = usd(d.spent);
+  $("k-range").textContent = `${dlabel(d.start)} – ${dlabel(d.end)}`;
+  $("k-n").textContent = d.purchases;
+  $("k-avg").textContent = d.purchases ? `avg ${usd(d.average)}` : "";
+  $("k-ref").textContent = usd(d.refunds, d.refunds > 0);
+  $("k-pairs").textContent = d.refunded_pairs ? `${d.refunded_pairs} fully refunded purchase(s) left out` : "partial refunds offset the total";
+  const prev = d.previous.spent;
+  if (prev > 0) {
+    const pct = (d.spent - prev) / prev * 100;
+    $("k-cmp").textContent = (pct > 0 ? "+" : pct < 0 ? "−" : "") + Math.abs(pct).toFixed(0) + "%";
+    $("k-cmp").className = "big num " + (pct > 0 ? "bad" : "good");
+  } else { $("k-cmp").textContent = "–"; $("k-cmp").className = "big num"; }
+  $("k-prev").textContent = `${usd(prev)} in ${dlabel(d.previous.start)} – ${dlabel(d.previous.end)}`;
+  $("sp-cats").innerHTML = catBars(d.categories, 40, "data-cat-pick");
+  all("[data-cat-pick]").forEach(x => x.onclick = () => { SP.cats = new Set([x.dataset.catPick]); loadSpending(); });
+  $("sp-rows").innerHTML = `<tr><th>Date</th><th>Merchant</th><th>Category</th><th>Account</th><th class="amt">Amount</th></tr>` +
+    (d.rows.length ? d.rows.map(r => `<tr class="${r.refunded ? "refunded" : ""}"><td class="muted">${dlabel(r.date)}</td>` +
+      `<td class="m"><span class="t">${esc(r.merchant || r.name)}</span>${r.refunded ? ' <span class="pill">refunded pair · nets $0</span>' : ""}</td>` +
+      `<td class="muted">${esc(catName(r.category))}</td><td class="muted">${esc(r.account)}</td>` +
+      `<td class="amt ${r.amount > 0 ? "good" : ""}">${usd(r.amount, true)}${cbTag(r.cashback)}</td></tr>`).join("")
+      : `<tr><td colspan="5" class="empty">No transactions match.</td></tr>`);
+}
+
+// estimated cash back next to an amount: +3% $1.14 (title says which tier)
+const cbTag = (cb) => cb ? ` <span class="cbtag" title="estimated cash back — ${esc(cb.label || "base rate")}">+${Math.round(cb.rate * 1000) / 10}% ${usd(cb.cashback)}</span>` : "";
+
+// ---- rewards --------------------------------------------------------------------
+const RW = {loaded: false};
+async function loadRewards() {
+  let d;
+  try { d = await api("/api/rewards"); }
+  catch (e) { $("rw").innerHTML = `<div class="c s12 bad">Rewards unavailable: ${esc(e.message)}</div>`; return; }
+  RW.loaded = true; renderRewards(d);
+}
+function rateTxt(c) {
+  const pct = (r) => (r * 100).toFixed(r * 100 % 1 ? 1 : 0) + "%";
+  const b = c.bonus.map(x => `${pct(x.rate)} ${esc(x.label)}`).join(" · ");
+  return b ? `${b} · ${pct(c.base)} other` : `${pct(c.base)} on everything`;
+}
+function renderRewards(d) {
+  let h = "";
+  for (const c of d.cards) {
+    const ea = c.earned_after != null
+      ? `<div class="row"><span class="muted">Est. earned since ${c.balance_as_of ? dlabel(c.balance_as_of) : "balance date"}</span>
+           <span class="v good">${usd(c.earned_after)}</span></div>
+         <div class="lbl" style="margin-top:4px">≈ ${usd(c.balance)} (issuer, ${c.balance_as_of ? dlabel(c.balance_as_of) : "–"}) + ${usd(c.earned_since)} estimated − ${usd(c.redeemed_since)} redeemed since</div>`
+      : `<div class="lbl" style="margin-top:8px">No issuer balance in config; set one in waterfall.toml to project it.</div>`;
+    h += `<div class="c s4"><div class="h">${esc(c.label)} <span class="sub">cash back</span></div>
+      <div class="big num">${usd(c.estimated)}</div>
+      <div class="lbl">estimated on ${c.purchases} purchase(s) · last ${d.estimated_span_days} days</div>
+      <div class="row" style="margin-top:8px"><span class="muted">Redeemed (statement credits on this card)</span><span class="v good">${usd(c.redeemed)}</span></div>
+      <div class="lbl" style="margin-top:8px">${rateTxt(c)}</div>
+      <div class="catbars" style="margin-top:8px">${catBars(c.per_month, 6)}</div>
+      ${ea}</div>`;
+  }
+  h += `<div class="c s12"><div class="h">How the numbers work</div><div class="lbl">
+    <b>Estimated</b>: each card purchase earns its best matching bonus rate (by merchant, else by Plaid's category), else the card's base rate; fully refunded purchases earn nothing.
+    <b>Redeemed</b>: real cash back that landed — a rewards deposit to the bank or a statement credit on a card, auto-tagged as income.
+    <b>Balance</b>: issuers don't share reward balances with Plaid, so it's set by hand in waterfall.toml and "earned since" is our estimate, not the issuer's.
+    Estimated cash back never counts as income or surplus; it lowers the real cost of purchases.</div></div>`;
+  $("rw").innerHTML = h;
+}
+
+// ---- close & waterfall -----------------------------------------------------------
+let MONTHS = null, ROTH = null;
+async function loadClose() {
+  try { [MONTHS, ROTH] = await Promise.all([api("/api/months"), api("/api/roth")]); }
+  catch (e) { $("cl-months").innerHTML = `<div class="bad">${esc(e.message)}</div>`; return; }
+  renderMonths(); renderClosePanels();
+}
+function renderMonths() {
+  const ms = MONTHS.months;
+  const ready = ms.filter(m => m.status === "closeable").length + ms.reduce((a, m) => a + m.bonus_candidates.filter(b => !b.decision).length, 0);
+  $("b-close").textContent = ready ? `● ${ready}` : "";
+  let h = `<table><tr><th>Month</th><th>Status</th><th class="amt">Paychecks</th><th class="amt">Spending</th><th class="amt">Subs</th><th class="amt">Rent &amp; bills</th><th class="amt">Surplus</th><th></th></tr>`;
+  for (const m of ms) {
+    const fr = m.frozen && "fixed" in m.frozen ? m.frozen : m.figures;
+    let st;
+    if (m.status === "closed") st = `<span class="pill good">closed</span>`;
+    else if (m.status === "closeable") st = `<span class="pill acc">ready to close</span>`;
+    else st = `<span class="pill ${m.partial_history ? "" : "warn"}" title="${esc(m.blockers.join("; "))}">${esc(m.partial_history ? "partial history" : m.blockers[0] || "open")}</span>`;
+    let extra = "";
+    if (m.drift && Object.keys(m.drift).length)
+      extra += `<div class="lbl bad">drift since close: ${esc(Object.entries(m.drift).map(([k, v]) => `${k} ${usd(v.frozen)} → ${usd(v.now)}`).join(", "))}</div>`;
+    for (const x of (m.month_end_balance && m.month_end_balance.mismatches) || [])
+      extra += `<div class="lbl bad">balance check ${esc(x.date)}: reported ${usd(x.reported)}, transactions say ${usd(x.reconstructed)}</div>`;
+    for (const b of m.bonus_candidates) {
+      extra += b.decision
+        ? `<div class="lbl">${dlabel(b.date)} deposit ${usd(b.amount)} = ${esc(b.decision)}${m.status !== "closed" ? ` <a href="#" class="acc" data-bonus="${esc(b.transaction_id)}" data-dec="">undo</a>` : ""}</div>`
+        : `<div class="lbl warn">possible bonus ${dlabel(b.date)} ${usd(b.amount)}: <button class="btn" data-bonus="${esc(b.transaction_id)}" data-dec="bonus">Bonus</button> <button class="btn" data-bonus="${esc(b.transaction_id)}" data-dec="paycheck">Just a paycheck</button></div>`;
+    }
+    const bal = m.status === "closed" ? m.hysa_balance : m.month_end_balance && m.month_end_balance.amount;
+    if (bal != null) extra += `<div class="lbl faint">HYSA ${usd(bal)} on ${dlabel(m.balance_as_of || m.month_end_balance.date)}</div>`;
+    const act = m.status === "closeable" ? `<button class="btn pri" data-close="${esc(m.month)}">Close</button>`
+      : m.status === "closed" ? `<button class="btn" data-reopen="${esc(m.month)}">Reopen</button>` : "";
+    h += `<tr><td><b>${esc(mlabel(m.month))}</b></td><td>${st}${extra}</td><td class="amt">${usd(fr.paychecks)}</td>` +
+      `<td class="amt">${usd(fr.spending)}</td><td class="amt">${usd(fr.subscriptions)}</td><td class="amt">${usd(fr.fixed)}</td>` +
+      `<td class="amt ${fr.surplus >= 0 ? "good" : "bad"}">${usd(fr.surplus)}</td><td>${act}</td></tr>`;
+  }
+  $("cl-months").innerHTML = h + "</table>";
+  all("[data-bonus]").forEach(b => b.onclick = async (e) => {
+    e.preventDefault();
+    try { await api(`/api/bonus/${encodeURIComponent(b.dataset.bonus)}`, {decision: b.dataset.dec || null}); }
+    catch (err) { log(`Bonus decision failed: ${err.message}`); }
+    refreshAll();
+  });
+  all("[data-close]").forEach(b => b.onclick = async () => {
+    const m = b.dataset.close;
+    if (!confirm(`Close ${m}? Its figures, month-end HYSA balance and recommendation freeze.`)) return;
+    try { await api(`/api/months/${m}/close`, {}); log(`Closed ${m}.`); } catch (e) { log(`Close failed: ${e.message}`); }
+    refreshAll();
+  });
+  all("[data-reopen]").forEach(b => b.onclick = async () => {
+    const m = b.dataset.reopen;
+    if (!confirm(`Reopen ${m}? The frozen snapshot is discarded.`)) return;
+    try { await api(`/api/months/${m}/reopen`, {}); log(`Reopened ${m}.`); } catch (e) { log(`Reopen failed: ${e.message}`); }
+    refreshAll();
+  });
+}
+function renderClosePanels() {
+  if (OV) {
+    const ro = OV.roth;
+    $("cl-ty").textContent = ro && ro.limit != null ? `TY${ro.tax_year} · ${usd(ro.remaining)} left` : "";
+    const closed = new Set(((MONTHS || {}).months || []).filter(m => m.status === "closed").map(m => m.month));
+    $("cl-sched").innerHTML = ro && ro.schedule ? ro.schedule.map(s => `<button class="${s.skipped ? "skip" : ""}" data-skip="${s.month}" data-on="${s.skipped ? 1 : 0}" ${closed.has(s.month) ? "disabled" : ""}>` +
+      `<span class="m">${esc(mlabel(s.month))}</span><span class="num ${s.skipped ? "" : "acc"}">${s.skipped ? "skip" : (Number.isInteger(s.amount) ? usd0(s.amount) : usd(s.amount))}</span></button>`).join("") : "";
+    all("[data-skip]").forEach(b => b.onclick = async () => {
+      try { await api(`/api/months/${b.dataset.skip}/skip-roth`, {skip: b.dataset.on !== "1"}); log(`${b.dataset.skip}: Roth ${b.dataset.on !== "1" ? "skipped" : "back on"}.`); }
+      catch (e) { log(`Skip failed: ${e.message}`); }
+      refreshAll();
+    });
+    $("cl-earmarks").innerHTML = OV.earmarks.length ? OV.earmarks.map(e => `<div class="row"><span>${esc(e.name)} ${e.note ? `<span class="pill">${esc(e.note)}</span>` : ""}` +
+      `${e.status !== "open" ? ' <span class="pill good">released</span>' : ""}</span><span class="v">${e.due ? "due " + esc(e.due) + " · " : ""}<span class="${e.status === "open" ? "acc" : "faint"}">${usd(e.amount)}</span></span></div>`).join("")
+      : '<div class="empty">No earmarks.</div>';
+  }
+  if (ROTH) {
+    $("cl-contrib").innerHTML = ROTH.contributions.length ? `<table><tr><th>Date</th><th>Tax year</th><th class="amt">Amount</th><th>Note</th><th></th></tr>` +
+      ROTH.contributions.map(c => `<tr><td>${esc(c.date)}</td><td>${c.tax_year}</td><td class="amt">${usd(c.amount)}</td><td class="muted">${esc(c.note || "–")}</td>` +
+        `<td><button class="btn" data-rcdel="${c.id}">Delete</button></td></tr>`).join("") + "</table>" : '<div class="empty">No contributions recorded yet.</div>';
+    all("[data-rcdel]").forEach(b => b.onclick = async () => {
+      if (!confirm("Delete this contribution?")) return;
+      try { await api(`/api/roth/${b.dataset.rcdel}/delete`, {}); log("Contribution deleted."); } catch (e) { log(`Delete failed: ${e.message}`); }
+      refreshAll();
+    });
+  }
+}
+$("rc-add").onclick = async () => {
+  try {
+    await api("/api/roth", {date: $("rc-date").value, amount: $("rc-amt").value, tax_year: $("rc-ty").value || null, note: $("rc-note").value});
+    $("rc-amt").value = $("rc-note").value = $("rc-ty").value = ""; log("Contribution added.");
+  } catch (e) { log(`Add failed: ${e.message}`); }
+  refreshAll();
+};
+
+// ---- admin ----------------------------------------------------------------------
+const PRODS = ["accounts", "transactions", "liabilities", "investments", "investment_transactions"];
+async function loadState() {
+  let st;
+  try { st = await api("/api/state"); } catch (e) { log(`State unavailable: ${e.message}`); return; }
+  const guard = st.item_guard;
+  $("slots").textContent = `Items ever created: ${st.items_ever_created}` + (guard ? ` / guard ${guard} (Trial cap 10)` : " (sandbox)");
+  $("btn-bank").disabled = $("btn-inv").disabled = !!(guard && st.items_ever_created >= guard);
+  const items = st.report.items;
+  const synced = items.map(i => i.last_sync).filter(Boolean).sort().pop();
+  if (synced) {
+    const h = (Date.now() - new Date(synced)) / 36e5;
+    $("synced").innerHTML = `<span class="dot" style="background:${h > 36 ? "var(--warn)" : "var(--good)"}"></span>Synced ${h < 1 ? Math.max(1, Math.round(h * 60)) + "m" : h < 48 ? Math.round(h) + "h" : Math.round(h / 24) + "d"} ago · ${items.length} institutions`;
+  }
+  const bad = items.filter(i => (i.health || {}).state !== "ok").length;
+  $("b-admin").textContent = bad ? `● ${bad}` : "";
+  $("ad-items").innerHTML = items.length ? `<table><tr><th>Institution</th><th>Accounts</th>${PRODS.map(p => `<th>${p.replace("_", " ")}</th>`).join("")}<th>Connection</th><th></th></tr>` +
+    items.map(it => {
+      const hs = it.health || {state: "ok", reason: ""};
+      return `<tr><td><b>${esc(it.institution)}</b><div class="lbl">${esc(it.link_kind)}</div></td><td class="muted">${it.account_types.map(esc).join("<br>")}</td>` +
+        PRODS.map(p => { const r = it.products[p] || {}; return `<td class="${r.status === "ok" ? "good" : r.status === "error" ? "bad" : r.status === "not_ready" ? "warn" : "faint"}" title="${esc(r.detail)}">${esc(r.status || "–")}</td>`; }).join("") +
+        `<td><span class="pill ${hs.state === "ok" ? "good" : hs.state === "expiring" ? "warn" : "bad"}">${esc(hs.state)}</span><div class="lbl">${esc(hs.reason)}</div></td>` +
+        `<td style="white-space:nowrap"><button class="btn ${hs.state === "ok" ? "" : "pri"}" data-reconnect="${esc(it.item_id)}">Re-connect</button> ` +
+        `<button class="btn" data-accounts="${esc(it.item_id)}" title="Add or remove accounts shared from this login">Accounts</button></td></tr>`;
+    }).join("") + "</table>" : '<div class="empty">Nothing connected yet.</div>';
+  all("[data-reconnect]").forEach(b => b.onclick = () => reconnect(b.dataset.reconnect, false));
+  all("[data-accounts]").forEach(b => b.onclick = () => reconnect(b.dataset.accounts, true));
+  $("md").textContent = st.report_md;
+}
+async function connect(kind) {
+  log(`Creating ${kind} link token…`);
+  try {
+    const { link_token } = await api("/api/link-token", { kind });
+    Plaid.create({
+      token: link_token,
+      onSuccess: async (public_token, metadata) => {
+        log(`Linked ${metadata.institution?.name || "institution"}; exchanging and syncing (can take ~30s)…`);
+        try { const res = await api("/api/exchange", { public_token, kind, institution: metadata.institution }); log(`Synced: ${JSON.stringify(res.results)}`); }
+        catch (e) { log(`Exchange/sync failed: ${e.message}`); }
+        refreshAll();
+      },
+      onExit: (err, metadata) => log(err ? `Link exited: ${err.error_code} ${err.display_message || err.error_message || ""}` : `Link closed (${metadata.status || "no status"}).`),
+    }).open();
+  } catch (e) { log(`Could not start Link: ${e.message}`); }
+}
+// Update mode: same Item, same token, no Trial slot. Never remove-and-relink.
+async function reconnect(itemId, accounts) {
+  log(accounts ? "Opening account selection…" : "Opening re-connect…");
+  try {
+    const { link_token } = await api(`/api/items/${encodeURIComponent(itemId)}/update-token`, { accounts });
+    Plaid.create({
+      token: link_token,
+      onSuccess: async () => {
+        log("Re-connected; re-syncing…");
+        try { const res = await api(`/api/items/${encodeURIComponent(itemId)}/reconnected`, {}); log(`Re-synced: ${JSON.stringify(res.results)}`); }
+        catch (e) { log(`Re-sync failed: ${e.message}`); }
+        refreshAll();
+      },
+      onExit: (err) => log(err ? `Re-connect exited: ${err.error_code} ${err.display_message || err.error_message || ""}` : "Re-connect closed."),
+    }).open();
+  } catch (e) { log(`Could not start re-connect: ${e.message}`); }
+}
+$("btn-bank").onclick = () => connect("bank");
+$("btn-inv").onclick = () => connect("investment");
+$("btn-sync").onclick = async () => {
+  $("btn-sync").disabled = true; log("Syncing all institutions…");
+  try { const r = await api("/api/sync", {}); log(`Synced: ${JSON.stringify(r.results)}`); }
+  catch (e) { log(`Sync failed: ${e.message}`); }
+  $("btn-sync").disabled = false; refreshAll();
+};
+
+async function loadReview() {
+  let rv;
+  try { rv = await api("/api/review"); }
+  catch (e) { $("rv-sum").textContent = `unavailable: ${e.message}`; $("review").innerHTML = ""; return; }
+  const m = rv.summary.matching || {};
+  $("rv-sum").textContent = `${rv.summary.total} transactions · ${m.matched || 0} transfer legs paired · ${m.refunded || 0} refunded purchases netted`;
+  if (!rv.queue.length) { $("review").innerHTML = '<div class="good">Nothing to review.</div>'; return; }
+  const opts = rv.classes.map(c => `<option>${esc(c)}</option>`).join("");
+  $("review").innerHTML = `<table><tr><th>Date</th><th>Account</th><th>Description</th><th class="amt">Amount</th><th>Why</th><th>Set as</th></tr>` +
+    rv.queue.map(q => `<tr><td>${esc(q.date)}</td><td class="muted">${esc(q.account)}</td><td>${esc(q.name)}</td><td class="amt">${usd(-q.amount, true)}</td>` +
+      `<td class="lbl">${esc(q.reason)}${q.match_status ? " · " + esc(q.match_status) : ""}</td>` +
+      `<td style="white-space:nowrap"><select class="inp" data-cls="${esc(q.transaction_id)}"><option value="">choose…</option>${opts}</select> ` +
+      `<input class="inp" data-note="${esc(q.transaction_id)}" placeholder="note" style="width:120px"> <button class="btn pri" data-save="${esc(q.transaction_id)}">Save</button></td></tr>`).join("") + "</table>";
+  all("[data-save]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.save, cls = document.querySelector(`[data-cls="${CSS.escape(id)}"]`).value;
+    if (!cls) { log("Pick a class first."); return; }
+    try { await api(`/api/review/${encodeURIComponent(id)}`, { class: cls, note: document.querySelector(`[data-note="${CSS.escape(id)}"]`).value }); log(`Saved as ${cls}.`); }
+    catch (e) { log(`Save failed: ${e.message}`); }
+    refreshAll();
+  });
+}
+
+function refreshAll() {
+  loadOverview(); loadClose(); loadState(); loadReview();
+  if (SP.loaded) loadSpending();
+}
+refreshAll();
+const start = location.hash.slice(1);
+if (["overview", "spending", "rewards", "close", "admin"].includes(start)) show(start);
+</script>
+</body>
+</html>
