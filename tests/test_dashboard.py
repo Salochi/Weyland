@@ -242,3 +242,62 @@ def test_dashboard_api(tmp_path, monkeypatch):
     assert c.get("/api/spending?start=2026-08-01", headers=h).status_code == 422
     page = c.get("/", headers=h).text
     assert 'id="ov"' in page and 'data-v="spending"' in page and "{{ENV}}" not in page
+
+
+def _k401(db, broken=True):
+    """401(k) on item i3 with two real contributions; its login broke after Aug 10."""
+    from weyland.dashboard import retirement_estimates
+    c = parse_config(_invest(db))
+    meta = '{"item_error": "ITEM_LOGIN_REQUIRED"}' if broken else '{}'
+    db.conn.execute("UPDATE items SET products_json=? WHERE item_id='i3'", (meta,))
+    for tid, d, amt in (("c1", "2026-07-24", 150), ("c2", "2026-08-07", 160)):
+        db.conn.execute("INSERT INTO investment_transactions(investment_transaction_id, account_id, item_id, date, "
+                        "amount, type, subtype) VALUES (?, 'k', 'i3', ?, ?, 'buy', 'contribution')", (tid, d, amt))
+    db.conn.execute("INSERT INTO investment_transactions(investment_transaction_id, account_id, item_id, date, "
+                    "amount, type, subtype) VALUES ('f1', 'k', 'i3', '2026-08-08', 5, 'fee', 'miscellaneous fee')")
+    db.conn.execute("INSERT INTO balance_snapshots(account_id, date, current, at) VALUES ('k', '2026-08-10', 8000, 'x')")
+    accts = accounts(db.conn, c)
+    retirement_estimates(db.conn, accts, classify(db.conn, c, today=TODAY))
+    return c, {a["account_id"]: a for a in accts}
+
+
+def test_half_synced_401k_repeats_last_contribution(tmp_path):
+    db = _db(tmp_path)
+    seed(db)  # paychecks Aug 7 and Aug 21
+    _tx(db, "pay3", "hysa", "2026-09-04", -2000, "ACME CORP PAYROLL", "INCOME", "INCOME_OTHER")
+    c, a = _k401(db)
+    e = a["k"]["estimate"]
+    # Aug 7 paycheck is already in the last balance (snapshot Aug 10); Aug 21 + Sept 4 are estimated
+    assert e["paychecks"] == ["2026-08-21", "2026-09-04"] and e["per_paycheck"] == 160
+    assert e["basis_date"] == "2026-08-07" and e["as_of"] == "2026-08-10"
+    assert e["current"] == 8000 + 2 * 160 and a["k"]["current"] == 8000  # real value untouched
+    nw = net_worth(list(a.values()))
+    assert nw["parts"]["retirement"] == 8320 and nw["estimated"] == [a["k"]["label"]]
+    ov = overview(db.conn, c, [], TODAY)
+    assert any("estimated, 2 paycheck contribution(s) added since 2026-08-10" in x["text"] for x in ov["attention"])
+    assert ov["net_worth"]["parts"]["retirement"] == 8320
+
+
+def test_half_synced_401k_off_when_healthy_or_bonus(tmp_path):
+    db = _db(tmp_path)
+    seed(db)
+    _tx(db, "pay3", "hysa", "2026-09-04", -2000, "ACME CORP PAYROLL", "INCOME", "INCOME_OTHER")
+    _, a = _k401(db, broken=False)
+    assert "estimate" not in a["k"]
+    assert "estimated" not in net_worth(list(a.values()))
+
+
+def test_half_synced_401k_skips_bonus_candidates(tmp_path):
+    db = _db(tmp_path)
+    seed(db)
+    _tx(db, "big", "hysa", "2026-09-04", -9000, "ACME CORP PAYROLL", "INCOME", "INCOME_OTHER")  # undecided bonus
+    _, a = _k401(db)
+    assert a["k"]["estimate"]["paychecks"] == ["2026-08-21"]
+
+
+def test_half_synced_401k_nothing_missed(tmp_path):
+    db = _db(tmp_path)
+    seed(db)
+    db.conn.execute("DELETE FROM transactions WHERE transaction_id='pay2'")
+    _, a = _k401(db)
+    assert "estimate" not in a["k"]

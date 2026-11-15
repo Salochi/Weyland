@@ -313,7 +313,7 @@ function netWorthCard(nw) {
     <div class="big num">${usd(nw.total)}</div><div class="lbl">${delta}</div>
     <svg id="spark" width="100%" height="70" viewBox="0 0 300 70" preserveAspectRatio="none" style="margin:12px 0 6px;display:block"></svg>
     ${line("Cash (bank accounts)", p.cash)}${line("Brokerage", p.brokerage)}${line("Roth IRA", p.roth)}
-    ${line("401(k)", p.retirement)}${line("Cards owed", p.cards, p.cards ? "bad" : "")}</div>`;
+    ${line("401(k)" + (nw.estimated ? " (est.)" : ""), p.retirement, nw.estimated ? "warn" : "")}${line("Cards owed", p.cards, p.cards ? "bad" : "")}</div>`;
 }
 
 function drawSpark(hist) {
@@ -374,9 +374,11 @@ function rothCard(ro) {
 const ROLE = {hysa: "HYSA", checking: "Checking", brokerage: "Brokerage", roth: "Roth IRA", retirement: "401(k)", ignore: ""};
 function accountTile(a) {
   const foot = {hysa: "emergency fund", checking: "pass-through", ignore: "not in waterfall"}[a.role] || "";
+  const e = a.estimate;
+  const est = e ? `Half-synced (${e.reason}): last reported ${usd(a.current)} on ${dlabel(e.as_of)} + ${e.paychecks.length} × ${usd(e.per_paycheck)} contribution (repeats ${dlabel(e.basis_date)}). Market moves not included.` : "";
   return `<div class="c s2 tile"><div class="inst">${esc(a.institution)}${ROLE[a.role] ? " · " + ROLE[a.role] : ""}</div>
-    <div class="name" title="${esc(a.label)}">${esc(a.label)}</div><div class="mid num">${usd(a.current)}</div>
-    <div class="foot"><span>${esc(a.subtype || "")}</span><span>${esc(foot)}</span></div></div>`;
+    <div class="name" title="${esc(a.label)}">${esc(a.label)}</div><div class="mid num">${usd(e ? e.current : a.current)}${e ? ` <span class="pill warn" title="${esc(est)}">est.</span>` : ""}</div>
+    <div class="foot"><span>${esc(a.subtype || "")}</span><span>${esc(e ? `last synced ${dlabel(e.as_of)}` : foot)}</span></div></div>`;
 }
 function cardTile(a) {
   const owed = Math.max(a.owed || 0, 0), credit = (a.owed || 0) < 0;

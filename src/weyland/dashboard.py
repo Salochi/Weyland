@@ -7,6 +7,7 @@ negative, except where a field name says otherwise (``owed``, ``spent``).
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
@@ -158,16 +159,66 @@ def _bucket_of(a: dict) -> str | None:
     return None
 
 
+def retirement_estimates(conn: sqlite3.Connection, accts: list[dict], rows: list) -> None:
+    """Half-synced 401(k): while a retirement account's login is broken, estimate it.
+
+    Contributions arrive with each paycheck at a fixed amount, so every regular
+    paycheck dated after both the last real contribution and the last reported
+    balance adds that last contribution again. Market moves are not estimated.
+    Sets ``a["estimate"]`` (and leaves ``current`` untouched); the first healthy
+    sync replaces it with real data.
+    """
+    from .report import item_health
+    health = {r[0]: item_health(json.loads(r[1] or "{}")) for r in
+              conn.execute("SELECT item_id, products_json FROM items")}
+    item_of = {r[0]: r[1] for r in conn.execute("SELECT account_id, item_id FROM accounts")}
+    paydays = sorted({r.date for r in rows if r.cls == "paycheck"
+                      and (not r.bonus_candidate or r.bonus_decision == "paycheck")})
+    for a in accts:
+        if a["role"] != "retirement" or a["current"] is None:
+            continue
+        h = health.get(item_of.get(a["account_id"]), {})
+        if h.get("state") in (None, "ok", "expiring"):
+            continue
+        last = conn.execute(
+            "SELECT date, SUM(amount) FROM investment_transactions WHERE account_id=? AND subtype='contribution' "
+            "GROUP BY date ORDER BY date DESC LIMIT 1", (a["account_id"],)).fetchone()
+        if not last or not last[1]:
+            continue
+        snap = conn.execute("SELECT MAX(date) FROM balance_snapshots WHERE account_id=? AND current IS NOT NULL",
+                            (a["account_id"],)).fetchone()[0]
+        since = max(last[0], snap or last[0])
+        missed = [d for d in paydays if d > since]
+        if not missed:
+            continue
+        per = round(abs(last[1]), 2)
+        a["estimate"] = {"reason": h.get("reason") or h.get("state"), "as_of": since,
+                         "per_paycheck": per, "basis_date": last[0], "paychecks": missed,
+                         "added": round(per * len(missed), 2),
+                         "current": round(a["current"] + per * len(missed), 2)}
+
+
 def net_worth(accts: list[dict]) -> dict:
-    """All cash and investment accounts (ignored ones included) minus card balances owed."""
+    """All cash and investment accounts (ignored ones included) minus card balances owed.
+
+    A half-synced 401(k) counts at its estimate (``estimated`` lists those accounts).
+    """
     parts = {"cash": 0.0, "brokerage": 0.0, "roth": 0.0, "retirement": 0.0, "cards": 0.0}
+    estimated = []
     for a in accts:
         b = _bucket_of(a)
         if b is None or a["current"] is None:
             continue
-        parts[b] += -max(a["current"], 0.0) if b == "cards" else a["current"]
+        cur = a["current"]
+        if a.get("estimate"):
+            cur = a["estimate"]["current"]
+            estimated.append(a["label"])
+        parts[b] += -max(cur, 0.0) if b == "cards" else cur
     parts = {k: round(v, 2) for k, v in parts.items()}
-    return {"total": round(sum(parts.values()), 2), "parts": parts}
+    out = {"total": round(sum(parts.values()), 2), "parts": parts}
+    if estimated:
+        out["estimated"] = estimated
+    return out
 
 
 def net_worth_history(conn: sqlite3.Connection, accts: list[dict]) -> list[dict]:
@@ -248,6 +299,7 @@ def overview(conn: sqlite3.Connection, cfg: WaterfallConfig, items: list[dict],
     accts = accounts(conn, cfg)
     ms = close_months(conn, cfg, today)
     rows = classify(conn, cfg, today=today)
+    retirement_estimates(conn, accts, rows)
 
     flow = []
     for m in sorted(ms, key=lambda x: x["month"])[-12:]:
@@ -274,6 +326,12 @@ def overview(conn: sqlite3.Connection, cfg: WaterfallConfig, items: list[dict],
         if h.get("state") not in (None, "ok"):
             attention.append({"level": "bad" if h["state"] != "expiring" else "warn",
                               "text": f"{it['institution']}: {h.get('reason') or h['state']}", "tab": "admin"})
+    for a in accts:
+        e = a.get("estimate")
+        if e:
+            attention.append({"level": "warn", "tab": "admin",
+                              "text": f"{a['label']}: estimated, {len(e['paychecks'])} paycheck contribution(s) "
+                                      f"added since {e['as_of']}; re-connect for real numbers"})
     synced = [it["last_sync"] for it in items if it.get("last_sync")]
     if synced:
         newest = max(datetime.fromisoformat(s.replace("Z", "+00:00")) for s in synced)
