@@ -37,8 +37,9 @@ backwards from the latest reported balance:
 (Plaid sign: amount > 0 is money out, so adding it back undoes it.) This is
 exact as long as no posted transaction is missing. Daily balance snapshots,
 recorded on every sync, check it: a snapshot taken on day d must match the
-reconstruction for d or d-1 (the sync may run before or after that day's
-postings) within $1, otherwise the month is flagged.
+reconstruction for d, d-1 or d-2 within $1, otherwise the month is flagged.
+The sync may run before or after that day's postings, and banks can lag Plaid's
+posting date by up to two days over a weekend (Oct 31 2026 was a Saturday).
 """
 
 from __future__ import annotations
@@ -70,6 +71,8 @@ def _month_bounds(month: str) -> tuple[date, date]:
 
 
 BALANCE_TOLERANCE = 1.00
+# A snapshot may lag the posting dates by this many days (weekend postings).
+BALANCE_LAG_DAYS = 2
 
 
 def _hysa_id(conn: sqlite3.Connection, cfg: WaterfallConfig) -> str | None:
@@ -105,8 +108,8 @@ class BalanceReplay:
         for d, reported in self.snaps:
             if not start <= d <= end:
                 continue
-            prev = (date.fromisoformat(d) - timedelta(days=1)).isoformat()
-            cands = [self.at(d), self.at(prev)]
+            day = date.fromisoformat(d)
+            cands = [self.at((day - timedelta(days=k)).isoformat()) for k in range(BALANCE_LAG_DAYS + 1)]
             if all(c is None or abs(c - reported) > BALANCE_TOLERANCE for c in cands):
                 out.append({"date": d, "reported": reported, "reconstructed": cands[0]})
         return out

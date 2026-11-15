@@ -151,6 +151,34 @@ def test_balance_snapshots_check_the_reconstruction(tmp_path):
         close_month(db.conn, cfg(), "2026-09", date(2026, 10, 24))
 
 
+def test_balance_check_allows_two_day_weekend_lag(tmp_path):
+    db = _db(tmp_path)
+    seed(db)
+    _tx(db, "s1", "hysa", "2026-09-05", -2000, "ACME CORP PAYROLL", "INCOME", "INCOME_OTHER")
+    # balance before the Sept 5 paycheck is 22000; a snapshot two days later still shows it
+    _snap(db, "2026-09-06", 22000)          # matches d-2 (Sept 4): posting lag, not a missing txn
+    ms = {m["month"]: m for m in months(db.conn, cfg(), date(2026, 10, 24))}
+    assert ms["2026-09"]["month_end_balance"]["mismatches"] == []
+    _snap(db, "2026-09-07", 22000)          # three days stale: still flagged
+    ms = {m["month"]: m for m in months(db.conn, cfg(), date(2026, 10, 24))}
+    assert [x["date"] for x in ms["2026-09"]["month_end_balance"]["mismatches"]] == ["2026-09-07"]
+    assert "balance check failed" in ms["2026-09"]["blockers"][0]
+
+
+def test_card_balance_check_allows_two_day_lag(tmp_path):
+    from weyland.close import BalanceReplay
+    db = _db(tmp_path)
+    seed(db)
+    acct = db.conn.execute("SELECT account_id FROM accounts ORDER BY account_id LIMIT 1").fetchone()[0]
+    db.conn.execute("UPDATE accounts SET current=500 WHERE account_id=?", (acct,))
+    _tx(db, "c1", acct, "2026-09-10", 200, "GROCER", "FOOD_AND_DRINK", "")  # owed 300 before, 500 after
+    _snap(db, "2026-09-10", 300, acct)      # d-1 match (Sept 9, before the purchase)
+    _snap(db, "2026-09-11", 300, acct)      # d-2 match
+    _snap(db, "2026-09-12", 300, acct)      # d-3: flagged
+    rp = BalanceReplay(db.conn, acct, credit=True)
+    assert [m["date"] for m in rp.mismatches("2026-09-10", "2026-09-12")] == ["2026-09-12"]
+
+
 def test_closed_balance_drift(tmp_path):
     db = _db(tmp_path)
     seed(db)
